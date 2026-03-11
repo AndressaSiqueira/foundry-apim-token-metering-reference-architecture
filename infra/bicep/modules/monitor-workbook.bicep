@@ -5,7 +5,6 @@
 
 param location string
 param logAnalyticsWorkspaceId string
-param appInsightsResourceId string
 param tags object = {}
 
 // Unique ID for the workbook

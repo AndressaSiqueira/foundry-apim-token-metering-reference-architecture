@@ -16,8 +16,8 @@ param location = 'eastus2'
 // Replace with the name of your Azure AI Foundry (Cognitive Services) account
 param foundryAccountName = 'YOUR_FOUNDRY_ACCOUNT_NAME'
 
-// Leave empty to use the same resource group as the deployment
-param foundryResourceGroupName = ''
+// Optional: set only when Foundry is in a different resource group.
+// If omitted, main.bicep defaults to the current deployment RG.
 
 // APIM publisher details
 param apimPublisherEmail = 'platform@contoso.com'

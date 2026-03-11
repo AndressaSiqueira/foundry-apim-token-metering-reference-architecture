@@ -1,0 +1,14 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "# Token Metering Dashboard\n\nThis workbook is a starter template deployed by Bicep.\n\nUse the KQL queries under `analytics/kql/` to build your visualizations."
+      },
+      "name": "text-intro"
+    }
+  ],
+  "isLocked": false,
+  "fallbackResourceIds": []
+}

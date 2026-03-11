@@ -90,8 +90,6 @@ module identities 'modules/identities.bicep' = {
   params: {
     location: location
     prefix: prefix
-    foundryAccountName: foundryAccountName
-    foundryResourceGroupName: foundryResourceGroupName
     appInsightsResourceId: appInsights.outputs.resourceId
     tags: tags
   }
@@ -117,7 +115,6 @@ module diagnostics 'modules/diagnostic-settings.bicep' = {
     apimName: apim.outputs.apimName
     logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceId
   }
-  dependsOn: [apim, logAnalytics]
 }
 
 module workbook 'modules/monitor-workbook.bicep' = {
@@ -125,7 +122,6 @@ module workbook 'modules/monitor-workbook.bicep' = {
   params: {
     location: location
     logAnalyticsWorkspaceId: logAnalytics.outputs.workspaceId
-    appInsightsResourceId: appInsights.outputs.resourceId
     tags: tags
   }
 }
@@ -134,17 +130,12 @@ module workbook 'modules/monitor-workbook.bicep' = {
 // RBAC: grant APIM MI the Cognitive Services OpenAI User role on Foundry
 // ---------------------------------------------------------------------------
 
-module foundryRbac 'modules/identities.bicep' = {
+module foundryRbac 'modules/foundry-rbac.bicep' = {
   name: 'assign-apim-foundry-rbac'
   scope: resourceGroup(foundryResourceGroupName)
   params: {
-    location: location
-    prefix: prefix
     foundryAccountName: foundryAccountName
-    foundryResourceGroupName: foundryResourceGroupName
-    appInsightsResourceId: appInsights.outputs.resourceId
     apimPrincipalId: apim.outputs.principalId
-    tags: tags
   }
 }
 
