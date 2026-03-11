@@ -1,0 +1,92 @@
+<!--
+  global-policy.xml
+  Scope: Global (all APIs in the APIM service)
+
+  Responsibilities:
+    - Inject / propagate x-correlation-id
+    - CORS headers (adjust origins for production)
+    - Global on-error handler with structured JSON error response
+    - Remove internal headers from responses
+-->
+<policies>
+  <inbound>
+    <!--
+      Correlation ID:
+      If the client sends x-correlation-id, propagate it.
+      Otherwise, generate a new GUID.
+    -->
+    <choose>
+      <when condition="@(context.Request.Headers.ContainsKey(&quot;x-correlation-id&quot;) &amp;&amp; !string.IsNullOrWhiteSpace(context.Request.Headers.GetValueOrDefault(&quot;x-correlation-id&quot;, &quot;&quot;)))">
+        <set-variable name="correlationId" value="@(context.Request.Headers.GetValueOrDefault(&quot;x-correlation-id&quot;, &quot;&quot;))" />
+      </when>
+      <otherwise>
+        <set-variable name="correlationId" value="@(Guid.NewGuid().ToString())" />
+      </otherwise>
+    </choose>
+    <!-- Propagate to backend -->
+    <set-header name="x-correlation-id" exists-action="override">
+      <value>@((string)context.Variables["correlationId"])</value>
+    </set-header>
+    <!-- CORS: restrict to known origins in production -->
+    <cors allow-credentials="false">
+      <allowed-origins>
+        <origin>*</origin>
+      </allowed-origins>
+      <allowed-methods>
+        <method>POST</method>
+        <method>GET</method>
+        <method>OPTIONS</method>
+      </allowed-methods>
+      <allowed-headers>
+        <header>Content-Type</header>
+        <header>Authorization</header>
+        <header>Ocp-Apim-Subscription-Key</header>
+        <header>x-tenant-id</header>
+        <header>x-consumer-name</header>
+        <header>x-correlation-id</header>
+        <header>traceparent</header>
+        <header>tracestate</header>
+      </allowed-headers>
+      <expose-headers>
+        <header>x-correlation-id</header>
+        <header>x-ratelimit-remaining-tokens</header>
+        <header>x-ratelimit-consumed-tokens</header>
+      </expose-headers>
+    </cors>
+    <base />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <!-- Return x-correlation-id to client -->
+    <set-header name="x-correlation-id" exists-action="override">
+      <value>@((string)context.Variables["correlationId"])</value>
+    </set-header>
+    <!-- Strip APIM internal headers -->
+    <set-header name="X-Powered-By" exists-action="delete" />
+    <set-header name="Server" exists-action="delete" />
+    <base />
+  </outbound>
+  <on-error>
+    <!-- Structured JSON error response -->
+    <set-header name="Content-Type" exists-action="override">
+      <value>application/json</value>
+    </set-header>
+    <set-header name="x-correlation-id" exists-action="override">
+      <value>@((string)context.Variables.GetValueOrDefault("correlationId", Guid.NewGuid().ToString()))</value>
+    </set-header>
+    <set-body>@{
+      return new JObject(
+        new JProperty("error", new JObject(
+          new JProperty("code", context.Response.StatusCode),
+          new JProperty("message", context.LastError.Message),
+          new JProperty("correlationId", (string)context.Variables.GetValueOrDefault("correlationId", "")),
+          new JProperty("source", context.LastError.Source),
+          new JProperty("reason", context.LastError.Reason)
+        ))
+      ).ToString();
+    }</set-body>
+    <base />
+  </on-error>
+</policies>

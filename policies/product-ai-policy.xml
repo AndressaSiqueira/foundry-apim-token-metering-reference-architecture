@@ -1,0 +1,93 @@
+<!--
+  product-ai-policy.xml
+  Scope: Product level (apply to ai-free, ai-standard, and ai-premium products)
+
+  Responsibilities:
+    - Authenticate to Azure AI Foundry via APIM system-assigned Managed Identity
+    - Extract tenant/consumer dimensions from request headers
+    - Enforce token-per-minute limit (adjust per product tier)
+    - Validate request size
+-->
+<policies>
+  <inbound>
+    <base />
+
+    <!--
+      Extract tenant metadata from request headers.
+      Clients MUST send:
+        x-tenant-id:      unique identifier for the calling tenant
+        x-consumer-name:  name of the calling app / agent (for metric dimensions)
+    -->
+    <set-variable name="tenantId"
+      value="@(context.Request.Headers.GetValueOrDefault(&quot;x-tenant-id&quot;, &quot;unknown&quot;))" />
+    <set-variable name="consumerName"
+      value="@(context.Request.Headers.GetValueOrDefault(&quot;x-consumer-name&quot;, &quot;unknown&quot;))" />
+
+    <!--
+      Extract model deployment name from the path:
+      Expected path pattern: /openai/deployments/{deployment-id}/...
+    -->
+    <set-variable name="modelDeployment"
+      value="@{
+        var path = context.Request.Url.Path;
+        var parts = path.Split('/');
+        var idx = System.Array.IndexOf(parts, &quot;deployments&quot;);
+        return (idx >= 0 &amp;&amp; idx + 1 < parts.Length) ? parts[idx + 1] : &quot;unknown&quot;;
+      }" />
+
+    <!--
+      Token limit policy.
+      Adjust tokens-per-minute to match the product tier.
+      For multi-tier products, create separate product-level policies per product.
+
+      counter-key uses Product.Id so each product tier has an independent bucket.
+      estimate-prompt-tokens=true prevents over-limit requests from reaching Foundry.
+    -->
+    <azure-openai-token-limit
+      tokens-per-minute="20000"
+      counter-key="@(context.Product.Id + &quot;:&quot; + context.Subscription.Id)"
+      estimate-prompt-tokens="true"
+      remaining-tokens-header-name="x-ratelimit-remaining-tokens"
+      tokens-consumed-header-name="x-ratelimit-consumed-tokens" />
+
+    <!--
+      Enforce maximum request body size (2 MB) to prevent abuse.
+    -->
+    <validate-content
+      unspecified-content-type-action="prevent"
+      max-size="2048000"
+      size-exceeded-action="prevent" />
+
+    <!--
+      Authenticate to Azure AI Foundry using APIM system-assigned Managed Identity.
+      The MI must have the "Cognitive Services OpenAI User" role on the Foundry account.
+    -->
+    <authentication-managed-identity
+      resource="https://cognitiveservices.azure.com/"
+      output-token-variable-name="foundryToken" />
+    <set-header name="Authorization" exists-action="override">
+      <value>@("Bearer " + (string)context.Variables["foundryToken"])</value>
+    </set-header>
+
+    <!--
+      Set backend URL to the Foundry endpoint (using named value).
+      This rewrites the host so APIM routes to Foundry.
+    -->
+    <set-backend-service
+      base-url="{{foundry-endpoint}}" />
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+    <!--
+      Strip the upstream Foundry Authorization header from the response
+      (belt-and-suspenders: Foundry doesn't echo it, but just in case).
+    -->
+    <set-header name="Authorization" exists-action="delete" />
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>

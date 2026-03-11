@@ -1,0 +1,87 @@
+<!--
+  operation-chat-policy.xml
+  Scope: API operation level (POST /openai/deployments/{deployment-id}/chat/completions)
+
+  Responsibilities:
+    - Emit token usage metrics to Azure Monitor with rich custom dimensions
+    - Validate Content-Type
+    - Propagate W3C traceparent for end-to-end correlation
+    - Privacy gate: do NOT log request/response body
+-->
+<policies>
+  <inbound>
+    <base />
+
+    <!--
+      Validate that the request is JSON.
+    -->
+    <choose>
+      <when condition="@(!context.Request.Headers.GetValueOrDefault(&quot;Content-Type&quot;, &quot;&quot;).Contains(&quot;application/json&quot;))">
+        <return-response>
+          <set-status code="415" reason="Unsupported Media Type" />
+          <set-header name="Content-Type" exists-action="override">
+            <value>application/json</value>
+          </set-header>
+          <set-body>{ "error": { "code": 415, "message": "Content-Type must be application/json" } }</set-body>
+        </return-response>
+      </when>
+    </choose>
+
+    <!--
+      Propagate W3C TraceContext (traceparent / tracestate) to Foundry.
+      The OTel SDK in the agent app sets traceparent; preserve it.
+    -->
+    <set-header name="traceparent" exists-action="skip">
+      <value>@(context.Request.Headers.GetValueOrDefault(&quot;traceparent&quot;, &quot;&quot;))</value>
+    </set-header>
+  </inbound>
+  <backend>
+    <base />
+  </backend>
+  <outbound>
+    <base />
+
+    <!--
+      Emit token usage metrics to Azure Monitor.
+
+      Metrics emitted:
+        PromptTokens     - number of tokens in the prompt
+        CompletionTokens - number of tokens in the completion
+        TotalTokens      - prompt + completion
+
+      Custom dimensions provide multi-dimensional slicing:
+        ApiId           - APIM API identifier
+        OperationId     - APIM operation identifier
+        ProductId       - APIM product (tier)
+        SubscriptionId  - APIM subscription (per-tenant)
+        tenant-id       - from x-tenant-id header
+        consumer-name   - from x-consumer-name header
+        model-deployment- extracted from request path
+        correlation-id  - x-correlation-id (end-to-end tracing)
+    -->
+    <azure-openai-emit-token-metric>
+      <dimension name="ApiId" />
+      <dimension name="OperationId" />
+      <dimension name="ProductId" />
+      <dimension name="SubscriptionId" />
+      <dimension name="tenant-id"
+        value="@(context.Variables.GetValueOrDefault&lt;string&gt;(&quot;tenantId&quot;, &quot;unknown&quot;))" />
+      <dimension name="consumer-name"
+        value="@(context.Variables.GetValueOrDefault&lt;string&gt;(&quot;consumerName&quot;, &quot;unknown&quot;))" />
+      <dimension name="model-deployment"
+        value="@(context.Variables.GetValueOrDefault&lt;string&gt;(&quot;modelDeployment&quot;, &quot;unknown&quot;))" />
+      <dimension name="correlation-id"
+        value="@(context.Request.Headers.GetValueOrDefault(&quot;x-correlation-id&quot;, &quot;none&quot;))" />
+    </azure-openai-emit-token-metric>
+
+    <!--
+      PRIVACY GATE:
+      Do NOT include response body in logs.
+      The diagnostic settings use verbosity=headers only.
+      Body is always passed through to the client but never stored.
+    -->
+  </outbound>
+  <on-error>
+    <base />
+  </on-error>
+</policies>
