@@ -1,0 +1,31 @@
+# FastAPI + OpenAI Python SDK
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+httpx>=0.27.0
+pydantic>=2.7.0
+pydantic-settings>=2.2.0
+
+# Azure Identity (Managed Identity / DefaultAzureCredential)
+azure-identity>=1.16.0
+
+# OpenAI Python SDK (for structured message handling)
+openai>=1.30.0
+
+# OpenTelemetry
+opentelemetry-sdk>=1.24.0
+opentelemetry-api>=1.24.0
+opentelemetry-instrumentation-fastapi>=0.45b0
+opentelemetry-instrumentation-httpx>=0.45b0
+
+# Azure Monitor OTel exporter
+azure-monitor-opentelemetry-exporter>=1.0.0b24
+
+# Testing
+pytest>=8.2.0
+pytest-asyncio>=0.23.0
+pytest-cov>=5.0.0
+httpx>=0.27.0          # included above; used in TestClient
+
+# Linting / type checking (dev)
+ruff>=0.4.0
+mypy>=1.10.0
