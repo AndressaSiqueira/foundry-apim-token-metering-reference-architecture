@@ -1,0 +1,99 @@
+{
+  "$schema": "https://aka.ms/foundry-apim-pricing-schema/2025-01",
+  "generated": "2025-01-01",
+  "currency": "USD",
+  "unit": "per_1000_tokens",
+  "region_note": "Rates shown are for East US / East US 2. Prices may vary by Azure region.",
+  "models": [
+    {
+      "id": "gpt-4o",
+      "display_name": "GPT-4o",
+      "versions": [
+        {
+          "version": "2024-08-06",
+          "input_rate": 0.00250,
+          "output_rate": 0.01000,
+          "cached_input_rate": 0.00125
+        },
+        {
+          "version": "2024-05-13",
+          "input_rate": 0.00500,
+          "output_rate": 0.01500,
+          "cached_input_rate": null
+        }
+      ]
+    },
+    {
+      "id": "gpt-4o-mini",
+      "display_name": "GPT-4o mini",
+      "versions": [
+        {
+          "version": "2024-07-18",
+          "input_rate": 0.000150,
+          "output_rate": 0.000600,
+          "cached_input_rate": 0.000075
+        }
+      ]
+    },
+    {
+      "id": "o1",
+      "display_name": "o1",
+      "versions": [
+        {
+          "version": "2024-12-17",
+          "input_rate": 0.01500,
+          "output_rate": 0.06000,
+          "cached_input_rate": 0.00750
+        }
+      ]
+    },
+    {
+      "id": "o1-mini",
+      "display_name": "o1-mini",
+      "versions": [
+        {
+          "version": "2024-09-12",
+          "input_rate": 0.00110,
+          "output_rate": 0.00440,
+          "cached_input_rate": null
+        }
+      ]
+    },
+    {
+      "id": "text-embedding-3-large",
+      "display_name": "text-embedding-3-large",
+      "versions": [
+        {
+          "version": "1",
+          "input_rate": 0.000130,
+          "output_rate": 0.0,
+          "cached_input_rate": null
+        }
+      ]
+    },
+    {
+      "id": "text-embedding-3-small",
+      "display_name": "text-embedding-3-small",
+      "versions": [
+        {
+          "version": "1",
+          "input_rate": 0.000020,
+          "output_rate": 0.0,
+          "cached_input_rate": null
+        }
+      ]
+    },
+    {
+      "id": "text-embedding-ada-002",
+      "display_name": "text-embedding-ada-002",
+      "versions": [
+        {
+          "version": "2",
+          "input_rate": 0.000100,
+          "output_rate": 0.0,
+          "cached_input_rate": null
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+// estimated-cost.kql
+// Purpose : Estimate USD cost per tenant per model per day by joining token counts
+//           with an inline pricing lookup table.
+// Pricing : Review and update the let pricingTable block when model rates change.
+//           Rates are USD per 1 000 tokens (as of 2025-01).
+//           See analytics/pricing/pricing.json for the machine-readable source.
+//
+// NOTE    : This query uses approximate spot pricing for showback / chargeback.
+//           Actual invoiced amounts may differ due to reservations, EA discounts,
+//           region multipliers, or PTU (Provisioned Throughput Units) commitments.
+
+let start = ago(30d);
+let end   = now();
+
+// ---------------------------------------------------------------------------
+// Inline pricing rates  – USD per 1 000 tokens
+// ---------------------------------------------------------------------------
+let pricingTable = datatable(
+    model: string,
+    inputRatePerK: real,
+    outputRatePerK: real
+)[
+    "gpt-4o",             0.005, 0.015,
+    "gpt-4o-mini",        0.00015, 0.0006,
+    "text-embedding-3-large", 0.00013, 0.0,
+    "text-embedding-3-small", 0.00002, 0.0
+];
+
+// ---------------------------------------------------------------------------
+// Raw token aggregation (same logic as tokens-per-tenant-day.kql)
+// ---------------------------------------------------------------------------
+let dailyTokens =
+    customMetrics
+    | where TimeGenerated between (start .. end)
+    | where name in ("PromptTokens", "CompletionTokens")
+    | extend
+        tenantId        = tostring(customDimensions["tenant-id"]),
+        consumerName    = tostring(customDimensions["consumer-name"]),
+        modelDeployment = tostring(customDimensions["model-deployment"]),
+        productId       = tostring(customDimensions["ProductId"]),
+        day             = bin(TimeGenerated, 1d)
+    | summarize
+        promptTokens     = sumif(value, name == "PromptTokens"),
+        completionTokens = sumif(value, name == "CompletionTokens")
+        by tenantId, consumerName, modelDeployment, productId, day;
+
+// ---------------------------------------------------------------------------
+// Join with pricing and compute estimated cost
+// ---------------------------------------------------------------------------
+dailyTokens
+| lookup kind=leftouter pricingTable on $left.modelDeployment == $right.model
+| extend
+    inputCostUsd  = (promptTokens     / 1000.0) * coalesce(inputRatePerK, 0.0),
+    outputCostUsd = (completionTokens / 1000.0) * coalesce(outputRatePerK, 0.0)
+| extend
+    totalCostUsd = inputCostUsd + outputCostUsd
+| project
+    day,
+    tenantId,
+    consumerName,
+    modelDeployment,
+    productId,
+    promptTokens,
+    completionTokens,
+    inputCostUsd        = round(inputCostUsd, 6),
+    outputCostUsd       = round(outputCostUsd, 6),
+    totalCostUsd        = round(totalCostUsd, 6)
+| sort by day desc, totalCostUsd desc

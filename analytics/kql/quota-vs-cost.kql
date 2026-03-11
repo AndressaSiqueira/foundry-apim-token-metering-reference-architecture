@@ -1,0 +1,56 @@
+// quota-vs-cost.kql
+// Purpose : Compare actual daily token consumption against the product-tier TPD
+//           (tokens-per-day) quota thresholds to surface tenants approaching or
+//           exceeding their limits.
+//
+// APIM product tiers and their default TPD limits match infra/bicep/modules/apim.bicep
+// and policies/product-ai-policy.xml (azure-openai-token-limit policy).
+// Adjust the quotaTable block if you change the tier limits in your deployment.
+
+let start = ago(30d);
+let end   = now();
+
+// ---------------------------------------------------------------------------
+// Product-tier TPD quotas (tokens per day)
+// Must be kept in sync with the azure-openai-token-limit policy values.
+// ---------------------------------------------------------------------------
+let quotaTable = datatable(productId: string, tpdQuota: long)[
+    "ai-free",     100000,
+    "ai-standard", 1000000,
+    "ai-premium",  10000000
+];
+
+// ---------------------------------------------------------------------------
+// Daily totals per tenant x product
+// ---------------------------------------------------------------------------
+let dailyTotals =
+    customMetrics
+    | where TimeGenerated between (start .. end)
+    | where name == "TotalTokens"
+    | extend
+        tenantId  = tostring(customDimensions["tenant-id"]),
+        productId = tostring(customDimensions["ProductId"]),
+        day       = bin(TimeGenerated, 1d)
+    | summarize totalTokens = sum(value) by tenantId, productId, day;
+
+// ---------------------------------------------------------------------------
+// Join with quotas and calculate utilisation
+// ---------------------------------------------------------------------------
+dailyTotals
+| lookup kind=leftouter quotaTable on productId
+| extend
+    utilisationPct = iff(
+        tpdQuota > 0,
+        round((todouble(totalTokens) / todouble(tpdQuota)) * 100, 2),
+        real(null)
+    ),
+    overQuota = totalTokens > tpdQuota
+| project
+    day,
+    tenantId,
+    productId,
+    totalTokens,
+    tpdQuota,
+    utilisationPct,
+    overQuota
+| sort by utilisationPct desc, day desc

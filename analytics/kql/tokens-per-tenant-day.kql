@@ -1,0 +1,35 @@
+// tokens-per-tenant-day.kql
+// Purpose : Aggregate prompt + completion token usage per tenant, per model, per day.
+// Table   : customMetrics (emitted by APIM azure-openai-emit-token-metric policy)
+// Usage   : Paste into Log Analytics / Application Insights "Logs" blade.
+//           Adjust the time range with the | where TimeGenerated filter below.
+//
+// Custom dimensions written by the APIM policy:
+//   tenant-id       – logical tenant identifier
+//   consumer-name   – service / agent that consumed tokens
+//   model-deployment– Foundry deployment name (e.g. gpt-4o)
+//   ApiId           – APIM API identifier
+//   ProductId       – APIM product (ai-free / ai-standard / ai-premium)
+//   SubscriptionId  – APIM subscription key identifier
+//   OperationId     – APIM operation identifier
+//   correlation-id  – end-to-end correlation token
+
+let start = ago(30d);
+let end   = now();
+
+customMetrics
+| where TimeGenerated between (start .. end)
+| where name in ("PromptTokens", "CompletionTokens", "TotalTokens")
+| extend
+    tenantId        = tostring(customDimensions["tenant-id"]),
+    consumerName    = tostring(customDimensions["consumer-name"]),
+    modelDeployment = tostring(customDimensions["model-deployment"]),
+    productId       = tostring(customDimensions["ProductId"]),
+    day             = bin(TimeGenerated, 1d)
+| summarize
+    promptTokens     = sumif(value, name == "PromptTokens"),
+    completionTokens = sumif(value, name == "CompletionTokens"),
+    totalTokens      = sumif(value, name == "TotalTokens"),
+    requestCount     = dcountif(tostring(customDimensions["correlation-id"]), name == "TotalTokens")
+    by tenantId, consumerName, modelDeployment, productId, day
+| sort by day desc, totalTokens desc

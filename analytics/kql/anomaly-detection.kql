@@ -1,0 +1,48 @@
+// anomaly-detection.kql
+// Purpose : Detect unusual spikes or drops in daily token consumption per tenant
+//           using KQL's built-in series_decompose_anomalies() function.
+// Requires: At least 14 days of historical data for reliable seasonality decomposition.
+//
+// Output columns:
+//   tenantId     – the tenant where the anomaly was detected
+//   day          – date of the anomalous point
+//   totalTokens  – actual daily token count
+//   baseline     – decomposed baseline (trend + seasonality)
+//   anomalyScore – positive = spike, negative = drop; |score| > 1.5 → anomaly
+
+let start       = ago(60d);
+let end         = now();
+let granularity = 1d;
+let threshold   = 1.5;   // GSAD score threshold – tune as needed
+
+let dailySeries =
+    customMetrics
+    | where TimeGenerated between (start .. end)
+    | where name == "TotalTokens"
+    | extend
+        tenantId = tostring(customDimensions["tenant-id"]),
+        day      = bin(TimeGenerated, granularity)
+    | summarize totalTokens = sum(value) by tenantId, day
+    | make-series tokenSeries = sum(totalTokens) default=0
+        on day
+        from start to end
+        step granularity
+        by tenantId;
+
+dailySeries
+| extend
+    anomalies = series_decompose_anomalies(tokenSeries, threshold),
+    baseline  = series_decompose(tokenSeries)
+| mv-expand
+    day          = day          to typeof(datetime),
+    tokenSeries  = tokenSeries  to typeof(long),
+    anomalyScore = anomalies    to typeof(double),
+    baselineVal  = baseline     to typeof(double)
+| where anomalyScore != 0   // only rows flagged as anomalies
+| project
+    tenantId,
+    day,
+    totalTokens  = tokenSeries,
+    baseline     = round(baselineVal, 0),
+    anomalyScore = round(anomalyScore, 3)
+| sort by abs(anomalyScore) desc, day desc
