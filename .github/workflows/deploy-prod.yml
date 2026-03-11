@@ -14,7 +14,7 @@ on:
       foundryResourceGroupName:
         description: Optional Foundry resource group (leave default to use same RG)
         required: true
-        default: rg-token-metering-prod
+        default: rg-three-pillars-foundry
 
 permissions:
   contents: read
@@ -33,12 +33,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate required secrets
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          FOUNDRY_ACCOUNT_NAME: ${{ secrets.FOUNDRY_ACCOUNT_NAME }}
+        run: |
+          test -n "$AZURE_CLIENT_ID" || (echo "Missing secret: AZURE_CLIENT_ID" && exit 1)
+          test -n "$AZURE_TENANT_ID" || (echo "Missing secret: AZURE_TENANT_ID" && exit 1)
+          test -n "$AZURE_SUBSCRIPTION_ID" || (echo "Missing secret: AZURE_SUBSCRIPTION_ID" && exit 1)
+          test -n "$FOUNDRY_ACCOUNT_NAME" || (echo "Missing secret: FOUNDRY_ACCOUNT_NAME" && exit 1)
+
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Bicep What-If
         run: |
@@ -48,7 +60,7 @@ jobs:
             --template-file infra/bicep/main.bicep \
             --parameters infra/bicep/main.bicepparam \
             --parameters environmentName="${{ github.event.inputs.environmentName }}" \
-            --parameters foundryAccountName="${{ vars.FOUNDRY_ACCOUNT_NAME }}" \
+            --parameters foundryAccountName="${{ secrets.FOUNDRY_ACCOUNT_NAME }}" \
             --parameters foundryResourceGroupName="${{ github.event.inputs.foundryResourceGroupName }}"
 
   deploy:
@@ -60,12 +72,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate required secrets
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          FOUNDRY_ACCOUNT_NAME: ${{ secrets.FOUNDRY_ACCOUNT_NAME }}
+        run: |
+          test -n "$AZURE_CLIENT_ID" || (echo "Missing secret: AZURE_CLIENT_ID" && exit 1)
+          test -n "$AZURE_TENANT_ID" || (echo "Missing secret: AZURE_TENANT_ID" && exit 1)
+          test -n "$AZURE_SUBSCRIPTION_ID" || (echo "Missing secret: AZURE_SUBSCRIPTION_ID" && exit 1)
+          test -n "$FOUNDRY_ACCOUNT_NAME" || (echo "Missing secret: FOUNDRY_ACCOUNT_NAME" && exit 1)
+
       - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy Bicep (Prod)
         run: |
@@ -75,5 +99,5 @@ jobs:
             --template-file infra/bicep/main.bicep \
             --parameters infra/bicep/main.bicepparam \
             --parameters environmentName="${{ github.event.inputs.environmentName }}" \
-            --parameters foundryAccountName="${{ vars.FOUNDRY_ACCOUNT_NAME }}" \
+            --parameters foundryAccountName="${{ secrets.FOUNDRY_ACCOUNT_NAME }}" \
             --parameters foundryResourceGroupName="${{ github.event.inputs.foundryResourceGroupName }}"
